@@ -26,6 +26,8 @@ dev = [
     "mypy>=1.10,<2",
     "pytest>=8.2,<9",
     "ruff>=0.5,<1",
+    "types-openpyxl>=3.1,<4",
+    "types-python-dateutil>=2.9,<3",
 ]
 
 [project.scripts]
@@ -50,4 +52,3 @@ select = ["B", "E", "F", "I", "SIM", "UP"]
 python_version = "3.12"
 strict = true
 files = ["src/point_audit", "app.py"]
-
