@@ -149,6 +149,48 @@ def test_raw_row_rejects_mixed_provenance() -> None:
         )
 
 
+def test_raw_cell_preserves_formula_and_cached_value() -> None:
+    cell = RawCell(
+        source_file_sha256=SOURCE_HASH,
+        sheet_name="Đợt 6",
+        excel_row=12,
+        excel_column=8,
+        source_column=SourceColumn.FINAL_TOTAL,
+        source_column_name="Tổng",
+        raw_text="=E12+F12-G12",
+        formula="=E12+F12-G12",
+        cached_value_text="37.5",
+    )
+
+    assert RawCell.model_validate_json(cell.model_dump_json()) == cell
+
+
+def test_raw_cell_rejects_inconsistent_formula_snapshot() -> None:
+    with pytest.raises(ValidationError, match="must start"):
+        RawCell(
+            source_file_sha256=SOURCE_HASH,
+            sheet_name="Đợt 6",
+            excel_row=12,
+            excel_column=8,
+            source_column=SourceColumn.FINAL_TOTAL,
+            source_column_name="Tổng",
+            raw_text="37.5",
+            formula="E12+F12-G12",
+        )
+
+    with pytest.raises(ValidationError, match="only valid for formula"):
+        RawCell(
+            source_file_sha256=SOURCE_HASH,
+            sheet_name="Đợt 6",
+            excel_row=12,
+            excel_column=8,
+            source_column=SourceColumn.FINAL_TOTAL,
+            source_column_name="Tổng",
+            raw_text="37.5",
+            cached_value_text="37.5",
+        )
+
+
 def test_event_id_is_stable_and_position_sensitive() -> None:
     first = _candidate()
     repeated = _candidate()
