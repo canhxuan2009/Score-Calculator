@@ -1,6 +1,6 @@
 # Point Audit
 
-Ứng dụng Python dùng để kiểm tra và đối soát điểm thi đua từ một sheet Excel. Hiện dự án đã có khung chạy, domain contract và lớp đọc workbook một sheet ở chế độ bất biến; chưa có logic tách sự kiện trong Minh chứng, áp dụng quy tắc hoặc tính điểm cuối.
+Ứng dụng Python dùng để kiểm tra và đối soát điểm thi đua từ một sheet Excel. Hiện dự án đã có khung chạy, domain contract, lớp đọc workbook một sheet ở chế độ bất biến và bộ tách sự kiện Minh chứng thuần Python. Semantic parser, áp dụng quy tắc và tính điểm cuối chưa được triển khai.
 
 ## Yêu cầu
 
@@ -42,6 +42,20 @@ print(result.header_row, len(result.students), result.scoring_period)
 ```
 
 Reader tự tìm header, chỉ giữ dòng học sinh, dừng ở vùng tổng hợp/footer, đọc công thức cùng cached value nếu workbook có lưu và kiểm tra hash trước/sau. Reader không gọi `save` và không thay đổi file nguồn.
+
+## Tách sự kiện Minh chứng
+
+```python
+from point_audit.parsing import segment_evidence
+
+result = segment_evidence("+2,5 trực nhật tốt; +1 giúp lớp")
+for segment in result.segments:
+    print(segment.raw_text, segment.source_span, segment.delimiter_after)
+```
+
+Segmenter giữ chính xác span và delimiter trong chuỗi nguồn, không tách dấu phẩy thập phân,
+bảo vệ URL/ngày/delta trong ngoặc và trả `SEGMENTATION_AMBIGUOUS` khi có nhiều cách tách hợp lý.
+Nội dung chưa hiểu không bị loại bỏ và không có lời gọi AI trong bước này.
 
 ## Chạy giao diện Streamlit
 
