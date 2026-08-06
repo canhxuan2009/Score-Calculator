@@ -24,19 +24,23 @@ flowchart TD
 - Tính SHA-256 trước xử lý.
 - Mở workbook ở chế độ chỉ đọc/dữ liệu phù hợp.
 - Ghi nhận metadata nhưng không lưu bản workbook vào log.
+- Implementation hiện tại tại `point_audit.ingestion.WorkbookReader` chỉ chấp nhận đúng một sheet, mở hai read-only view (`data_only=false/true`) và kiểm tra lại SHA-256 sau khi đóng cả hai view.
 
 ### 2.2 Sheet Profiler
 
-- Quét các hàng đầu để tìm header bằng alias và điểm tin cậy.
+- Quét toàn sheet để tìm duy nhất một header có đồng thời `Họ và tên`, `Điểm cộng`, `Điểm trừ`, `Tổng`, `Minh chứng`; không giả định header ở hàng 1.
 - Ánh xạ cột vật lý sang tên chuẩn.
 - Phân loại toàn bộ hàng, không giả định dữ liệu bắt đầu từ hàng 1 hoặc kết thúc ở dòng trống đầu tiên.
 - Tách `PERSON_ROW` khỏi summary/footer bằng nhiều tín hiệu.
+- Baseline hiện tại nhận dòng học sinh bằng TT số và/hoặc Họ và tên, dừng ở `TỔNG HỢP`, `Thành tích lớp`, `GVCN`, đồng thời đọc `ScoringPeriod` từ vùng tiêu đề phía trên.
 
 ### 2.3 Source Extractor
 
-- Tạo `PersonSourceRecord` cho mỗi hàng người.
+- Tạo `IngestedStudentRow` và `RawWorkbookRow` cho mỗi hàng người.
 - Giữ giá trị hiển thị và giá trị parse của điểm nguồn.
-- Tạo `EvidenceCell` với tọa độ A1, row/column index và nguyên văn.
+- Tạo `RawCell` cho cột Minh chứng với row/column index, tên cột vật lý và nguyên văn.
+- Dùng `Decimal` cho điểm parse được, giữ công thức và cached value riêng; kiểm tra sơ bộ công thức tổng và thêm `ROW_FORMULA_MISMATCH` mà không sửa dữ liệu.
+- Ngày sinh được parse như thuộc tính người từ Excel date, chuỗi hoặc serial; tuyệt đối không dùng làm ngày sự kiện.
 
 ### 2.4 Deterministic Segmenter
 
@@ -146,4 +150,3 @@ Kết quả AI có thể cache theo hash của raw segment + prompt/model/schema
 Thiết kế phù hợp một CLI/library Python trước, sau đó thêm giao diện duyệt. Các module dự kiến (chỉ là ranh giới, chưa phải code): `ingest`, `profiling`, `parsing`, `ai_adapter`, `rules`, `review`, `calculation`, `reporting`, `contracts`.
 
 Các dependency cụ thể chỉ được chọn ở milestone triển khai sau benchmark file mẫu.
-
