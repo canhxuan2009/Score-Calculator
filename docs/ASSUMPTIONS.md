@@ -13,6 +13,8 @@ Tài liệu này tách rõ điều đã được yêu cầu, quyết định thi
 - Conflict declared/expected phải là `RULE_CONFLICT`, không tự chọn.
 - AI chỉ hỗ trợ tách/hiểu; Python áp rule/tính/đối soát.
 - Workbook nguồn bất biến.
+- Ngày sự kiện thiếu năm dùng `ScoringPeriod` khi kỳ cho đúng một năm hợp lý; ngày
+  ngoài kỳ được giữ nguyên và cảnh báo, không tự sửa.
 
 ## 2. Quyết định an toàn tạm thời
 
@@ -25,7 +27,7 @@ Những quyết định này được dùng để hoàn thiện đặc tả, có
 | Cột Điểm trừ nguồn | độ lớn không âm | phù hợp công thức `gốc + cộng - trừ` |
 | Xung đột/trùng/mơ hồ | chặn event, chờ duyệt | không tự làm sai dữ liệu |
 | Event bị từ chối | `final_delta = null`, loại có dấu vết | phân biệt loại với 0 điểm |
-| Ngày thiếu năm | giữ raw, chưa dựng ISO đầy đủ | tránh gán sai năm |
+| Ngày thiếu năm | chỉ dựng ngày đầy đủ khi `ScoringPeriod` suy ra duy nhất; luôn giữ raw/span | tránh gán sai năm và vẫn hỗ trợ sắp thời gian |
 | Hạnh kiểm | chỉ giữ và đối chiếu nếu có rule riêng | yêu cầu chưa nêu cách tính |
 | Nhiều sheet | dừng có hướng dẫn | input contract nói một sheet |
 | Output | file mới + audit machine-readable | bảo vệ nguồn và truy vết |
@@ -50,10 +52,6 @@ Cần chọn policy riêng cho:
 ### B3. So sánh và làm tròn điểm ra sao?
 
 Cần biết số chữ số thập phân, có cho tolerance hay yêu cầu bằng Decimal tuyệt đối, và cách làm tròn (`ROUND_HALF_UP` hay chính sách khác). Đề xuất: chuẩn hóa trailing zero và so sánh Decimal chính xác; không dùng tolerance nếu rule tạo điểm rời rạc.
-
-### B4. Năm của ngày sự kiện lấy từ đâu?
-
-Ví dụ chỉ có `10/3`. Cần năm học, kỳ/đợt hoặc metadata do người dùng nhập. Đề xuất: yêu cầu `academic_year`/kỳ ở cấu hình run; nếu vẫn có hai năm hợp lệ và không suy ra chắc chắn thì giữ partial date + cảnh báo.
 
 ### B5. Đầu ra và nơi duyệt mong muốn?
 
@@ -86,4 +84,3 @@ Cần xác nhận có được gửi tên/ngày sinh/nội dung Minh chứng t�
 - Dấu phẩy giữa sự kiện và dấu phẩy thập phân có thể phân biệt bằng ngữ cảnh trong phần lớn trường hợp.
 
 Mỗi giả định thất bại trong file thật phải trở thành fixture regression và, nếu ảnh hưởng hợp đồng, cập nhật tài liệu trước khi sửa code.
-
