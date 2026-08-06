@@ -2,9 +2,9 @@
 
 ## Trạng thái hiện tại
 
-- Giai đoạn: `Milestone 1 — project skeleton / in progress`.
+- Giai đoạn: `Milestone 1 input guard + Milestone 2 ingestion baseline / in progress`.
 - Repository ban đầu chỉ có tài liệu đặc tả; skeleton Python 3.12 hiện đã được tạo.
-- Logic nghiệp vụ phân tích Minh chứng, áp dụng quy tắc và tính điểm: chưa triển khai.
+- Lớp đọc workbook một sheet đã triển khai; logic phân tích Minh chứng, áp dụng quy tắc và tính điểm cuối vẫn chưa triển khai.
 - Tài liệu nền tảng: đã thiết kế trong bộ tài liệu này.
 - Ngày cập nhật: 2026-08-06.
 
@@ -17,21 +17,26 @@
 - OpenAI SDK là optional dependency, không cần để import package, chạy CLI hoặc khởi động UI.
 - Tooling và cấu hình cho pytest, Ruff và mypy strict trong `pyproject.toml`.
 - Smoke tests xác minh package import và CLI help hoạt động.
-- Domain contract Pydantic v2 phiên bản `0.2.0` đã được triển khai tại
+- Domain contract Pydantic v2 phiên bản `0.3.0` đã được triển khai tại
   `src/point_audit/domain`.
 - Domain model đã bao phủ provenance workbook, candidate/parsed event, ngày thiếu năm,
   kỳ tính điểm, rule/match/conflict, duplicate, review/timeline, totals và đối soát theo người.
 - Mọi giá trị điểm/confidence dùng `Decimal` hữu hạn; model từ chối `float`, `NaN` và vô hạn.
 - Event ID ổn định được sinh bằng SHA-256 từ định danh file nguồn và vị trí/span sự kiện.
-- `docs/DATA_CONTRACT.md` đã đồng bộ với code contract `0.2.0`.
+- `docs/DATA_CONTRACT.md` đã đồng bộ với code contract `0.3.0`.
+- `WorkbookReader` tại `src/point_audit/ingestion` chỉ nhận đúng một sheet, tự tìm header không phụ thuộc hàng 1 và không ghi workbook.
+- Reader mở song song read-only view công thức/cached value, giữ cả hai trong provenance khi có và kiểm tra SHA-256 trước/sau.
+- Reader nhận diện `ScoringPeriod` từ tiêu đề phía trên, đọc ngày sinh dạng Excel date/chuỗi/serial và không dùng ngày sinh làm ngày sự kiện.
+- Dòng học sinh được xác định bằng TT số và/hoặc Họ và tên; các vùng `TỔNG HỢP`, `Thành tích lớp`, `GVCN` bị loại và chặn phần đọc phía sau.
+- Các tổng khai báo được parse bằng `Decimal`; sai công thức dòng sinh `ROW_FORMULA_MISMATCH` nhưng dữ liệu và dòng vẫn được giữ.
 
 ## Kiểm tra gần nhất
 
 Chạy trong Python 3.12.13 với môi trường `.venv` cục bộ:
 
-- `pytest`: đạt, `34 passed`.
+- `pytest`: đạt, `44 passed`.
 - `ruff check .`: đạt, không có lỗi.
-- `mypy src/point_audit app.py`: đạt, 18 source files không có lỗi.
+- `mypy src/point_audit app.py`: đạt, 21 source files không có lỗi.
 - `python -m point_audit --help`: exit code 0.
 - Streamlit `AppTest` khi `AI_ENABLED=false` và không có API key: đạt.
 
@@ -70,4 +75,5 @@ Chi tiết và đề xuất mặc định nằm trong `docs/ASSUMPTIONS.md`.
 1. Người dùng xác nhận các câu hỏi chặn trong `docs/ASSUMPTIONS.md`.
 2. Bổ sung bảng quy tắc phiên bản đầu tiên cùng ví dụ đúng/sai đã ẩn danh.
 3. Chốt hợp đồng đầu ra và luồng duyệt.
-4. Tiếp tục Milestone 1 bằng input guard, hash kiểm tra bất biến workbook và fixture tích hợp sau khi dữ liệu mẫu/phạm vi tương ứng được xác nhận.
+4. Cung cấp golden workbook đã ẩn danh để kiểm chứng alias và phân loại hàng trên dữ liệu thực tế.
+5. Chỉ bắt đầu parser Minh chứng/rule engine sau khi các blocker tương ứng được xác nhận.
