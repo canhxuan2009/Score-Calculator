@@ -1,6 +1,6 @@
 # Point Audit
 
-Ứng dụng Python dùng để kiểm tra và đối soát điểm thi đua từ một sheet Excel. Hiện dự án đã có khung chạy, domain contract, lớp đọc workbook một sheet ở chế độ bất biến và bộ tách sự kiện Minh chứng thuần Python. Semantic parser, áp dụng quy tắc và tính điểm cuối chưa được triển khai.
+Ứng dụng Python dùng để kiểm tra và đối soát điểm thi đua từ một sheet Excel. Hiện dự án đã có khung chạy, domain contract, lớp đọc workbook một sheet ở chế độ bất biến, bộ tách sự kiện và semantic parser thuần Python. Áp dụng quy tắc và tính điểm cuối chưa được triển khai.
 
 ## Yêu cầu
 
@@ -46,16 +46,22 @@ Reader tự tìm header, chỉ giữ dòng học sinh, dừng ở vùng tổng h
 ## Tách sự kiện Minh chứng
 
 ```python
-from point_audit.parsing import segment_evidence
+from point_audit.parsing import parse_event_candidate, segment_evidence
 
 result = segment_evidence("+2,5 trực nhật tốt; +1 giúp lớp")
 for segment in result.segments:
     print(segment.raw_text, segment.source_span, segment.delimiter_after)
+
+# Sau khi chuyển segment thành EventCandidate có provenance:
+# parsed = parse_event_candidate(candidate, scoring_period=period)
+# print(parsed.academic_score, parsed.declared_delta, parsed.event_category)
 ```
 
 Segmenter giữ chính xác span và delimiter trong chuỗi nguồn, không tách dấu phẩy thập phân,
 bảo vệ URL/ngày/delta trong ngoặc và trả `SEGMENTATION_AMBIGUOUS` khi có nhiều cách tách hợp lý.
 Nội dung chưa hiểu không bị loại bỏ và không có lời gọi AI trong bước này.
+Semantic parser nhận diện riêng điểm môn, điểm cộng/trừ khai báo, ngày, môn và category;
+nó không đặt `expected_delta`, `final_delta` hoặc chọn quy tắc.
 
 ## Chạy giao diện Streamlit
 
