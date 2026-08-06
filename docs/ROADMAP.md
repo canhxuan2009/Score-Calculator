@@ -2,6 +2,8 @@
 
 Roadmap chia theo cổng chất lượng. Không bắt đầu milestone sau khi tiêu chí thoát của milestone trước chưa đạt.
 
+> Trạng thái 2026-08-06: theo yêu cầu triển khai trực tiếp của người dùng, input guard và baseline ingestion một sheet đã được thực hiện bằng fixture ẩn danh dù các blocker nghiệp vụ của Milestone 0 vẫn còn. Việc này không suy đoán bảng quy tắc và không mở phạm vi parser/rule engine.
+
 ## Milestone 0 — Chốt nghiệp vụ và dữ liệu
 
 ### Công việc
@@ -28,6 +30,8 @@ Roadmap chia theo cổng chất lượng. Không bắt đầu milestone sau khi 
 - Xây input guard, hash nguồn và kiểm tra một sheet.
 - Fixture bảo đảm workbook nguồn không đổi.
 
+Input guard, hash bất biến và fixture tích hợp đã hoàn thành. Logging an toàn vẫn là phần còn lại trước khi đóng toàn bộ milestone.
+
 ### Tiêu chí thoát
 
 - Schema validation và serialization round-trip đạt kiểm thử.
@@ -42,6 +46,8 @@ Roadmap chia theo cổng chất lượng. Không bắt đầu milestone sau khi 
 - Row classifier cho person/header/summary/footer/blank/unknown.
 - Parse điểm nguồn bằng Decimal, giữ raw values.
 - Báo cáo lỗi cột bắt buộc và dòng không xác định.
+
+Baseline đã hoàn thành cho header bắt buộc, alias cột, dòng học sinh/footer, `Decimal`, ngày sinh và provenance. Golden workbook nghiệp vụ vẫn cần được cung cấp để hoàn tất tiêu chí thoát của milestone.
 
 ### Tiêu chí thoát
 
@@ -141,4 +147,3 @@ Roadmap chia theo cổng chất lượng. Không bắt đầu milestone sau khi 
 - Integration: workbook read-only đến artifact output.
 - AI contract tests: JSON sai, hallucinated fields, timeout và kết quả mơ hồ.
 - Regression: mỗi lỗi người dùng báo phải có fixture tối thiểu đã ẩn danh.
-
