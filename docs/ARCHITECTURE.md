@@ -58,6 +58,14 @@ Gồm hai adapter có cùng hợp đồng:
 
 Python hợp nhất/kiểm tra kết quả. AI không được trả `expected_delta`, `final_delta`, rule ID được chọn hay bất kỳ tổng nào. Nếu model vẫn trả các trường cấm, output bị từ chối.
 
+Baseline thuần Python hiện tại tại `point_audit.parsing.parse_event_candidate`:
+
+- ưu tiên delta có dấu được viết trực tiếp và lưu thành `declared_delta`;
+- nhận diện độc lập điểm môn, môn học, ngày và `EventCategory`;
+- dùng `ScoringPeriod` chỉ để suy ra duy nhất năm của ngày/tháng;
+- giữ span tuyệt đối trên `RawCell.raw_text` cho subject, academic score, ngày và delta;
+- không gọi rule engine và luôn để trống expected/final delta cùng rule match.
+
 ### 2.6 Normalizer
 
 - Chuẩn hóa Unicode, khoảng trắng, chữ hoa/thường và alias để khớp.
