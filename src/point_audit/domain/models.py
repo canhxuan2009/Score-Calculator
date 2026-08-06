@@ -81,6 +81,8 @@ class RawCell(DomainModel):
     source_column: SourceColumn
     source_column_name: str
     raw_text: str
+    formula: str | None = None
+    cached_value_text: str | None = None
 
     @field_validator("source_file_sha256")
     @classmethod
@@ -94,6 +96,17 @@ class RawCell(DomainModel):
     @classmethod
     def validate_names(cls, value: str) -> str:
         return _require_nonblank(value, "source name")
+
+    @model_validator(mode="after")
+    def validate_formula_snapshot(self) -> Self:
+        if self.formula is not None:
+            if not self.formula.startswith("="):
+                raise ValueError("formula must start with '='")
+            if self.raw_text != self.formula:
+                raise ValueError("raw_text must preserve the formula text")
+        elif self.cached_value_text is not None:
+            raise ValueError("cached_value_text is only valid for formula cells")
+        return self
 
 
 class RawWorkbookRow(DomainModel):
