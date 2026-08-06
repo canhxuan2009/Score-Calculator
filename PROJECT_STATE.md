@@ -17,14 +17,21 @@
 - OpenAI SDK là optional dependency, không cần để import package, chạy CLI hoặc khởi động UI.
 - Tooling và cấu hình cho pytest, Ruff và mypy strict trong `pyproject.toml`.
 - Smoke tests xác minh package import và CLI help hoạt động.
+- Domain contract Pydantic v2 phiên bản `0.2.0` đã được triển khai tại
+  `src/point_audit/domain`.
+- Domain model đã bao phủ provenance workbook, candidate/parsed event, ngày thiếu năm,
+  kỳ tính điểm, rule/match/conflict, duplicate, review/timeline, totals và đối soát theo người.
+- Mọi giá trị điểm/confidence dùng `Decimal` hữu hạn; model từ chối `float`, `NaN` và vô hạn.
+- Event ID ổn định được sinh bằng SHA-256 từ định danh file nguồn và vị trí/span sự kiện.
+- `docs/DATA_CONTRACT.md` đã đồng bộ với code contract `0.2.0`.
 
 ## Kiểm tra gần nhất
 
 Chạy trong Python 3.12.13 với môi trường `.venv` cục bộ:
 
-- `pytest`: đạt, `3 passed`.
+- `pytest`: đạt, `34 passed`.
 - `ruff check .`: đạt, không có lỗi.
-- `mypy src/point_audit app.py`: đạt, 15 source files không có lỗi.
+- `mypy src/point_audit app.py`: đạt, 18 source files không có lỗi.
 - `python -m point_audit --help`: exit code 0.
 - Streamlit `AppTest` khi `AI_ENABLED=false` và không có API key: đạt.
 
@@ -63,4 +70,4 @@ Chi tiết và đề xuất mặc định nằm trong `docs/ASSUMPTIONS.md`.
 1. Người dùng xác nhận các câu hỏi chặn trong `docs/ASSUMPTIONS.md`.
 2. Bổ sung bảng quy tắc phiên bản đầu tiên cùng ví dụ đúng/sai đã ẩn danh.
 3. Chốt hợp đồng đầu ra và luồng duyệt.
-4. Tiếp tục Milestone 1 bằng domain schema, input guard và fixture bất biến nguồn sau khi dữ liệu mẫu/phạm vi tương ứng được xác nhận.
+4. Tiếp tục Milestone 1 bằng input guard, hash kiểm tra bất biến workbook và fixture tích hợp sau khi dữ liệu mẫu/phạm vi tương ứng được xác nhận.
