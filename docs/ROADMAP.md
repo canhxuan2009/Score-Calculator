@@ -57,6 +57,10 @@ Baseline đã hoàn thành cho header bắt buộc, alias cột, dòng học sin
 
 ## Milestone 3 — Parser xác định
 
+Baseline segmenter và semantic parser thuần Python đã hoàn thành. Parser hiện nhận
+delta khai báo, điểm/môn học, ngày có suy ra năm từ `ScoringPeriod`, category và exact
+span. Golden workbook nghiệp vụ vẫn cần để hoàn tất tiêu chí thoát trên dữ liệu thật.
+
 ### Công việc
 
 - Segmenter có bảo vệ dấu phẩy thập phân, ngày và ngoặc delta.
