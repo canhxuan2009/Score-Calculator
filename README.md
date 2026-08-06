@@ -1,6 +1,6 @@
 # Point Audit
 
-Khung ứng dụng Python dùng để kiểm tra và đối soát điểm thi đua từ một sheet Excel. Giai đoạn hiện tại chỉ thiết lập cấu trúc, cấu hình, CLI, giao diện Streamlit tối thiểu và công cụ kiểm tra chất lượng; chưa có logic phân tích Minh chứng hoặc tính điểm.
+Ứng dụng Python dùng để kiểm tra và đối soát điểm thi đua từ một sheet Excel. Hiện dự án đã có khung chạy, domain contract và lớp đọc workbook một sheet ở chế độ bất biến; chưa có logic tách sự kiện trong Minh chứng, áp dụng quy tắc hoặc tính điểm cuối.
 
 ## Yêu cầu
 
@@ -32,13 +32,24 @@ Sau khi cài package:
 python -m point_audit --help
 ```
 
+## Đọc workbook một sheet
+
+```python
+from point_audit.ingestion import WorkbookReader
+
+result = WorkbookReader().read("duong-dan/workbook.xlsx")
+print(result.header_row, len(result.students), result.scoring_period)
+```
+
+Reader tự tìm header, chỉ giữ dòng học sinh, dừng ở vùng tổng hợp/footer, đọc công thức cùng cached value nếu workbook có lưu và kiểm tra hash trước/sau. Reader không gọi `save` và không thay đổi file nguồn.
+
 ## Chạy giao diện Streamlit
 
 ```bash
 streamlit run app.py
 ```
 
-Giao diện hiện chỉ là trang khởi động và hiển thị trạng thái AI; chưa xử lý workbook.
+Giao diện hiện chỉ là trang khởi động và hiển thị trạng thái AI; ingestion mới được cung cấp qua Python API, chưa nối vào giao diện.
 
 ## Kiểm tra chất lượng
 
