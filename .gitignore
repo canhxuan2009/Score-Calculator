@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Point Audit generated reports and local databases
+output/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local workbooks may contain personal data
+sample_data/*.xlsx
+sample_data/*.xlsm
