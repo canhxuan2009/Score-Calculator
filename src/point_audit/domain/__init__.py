@@ -40,7 +40,7 @@ from point_audit.domain.types import (
     build_event_id,
 )
 
-DOMAIN_CONTRACT_VERSION = "0.2.0"
+DOMAIN_CONTRACT_VERSION = "0.3.0"
 
 __all__ = [
     "CalculatedRowTotals",
