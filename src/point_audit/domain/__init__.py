@@ -3,6 +3,7 @@
 from point_audit.domain.enums import (
     DatePrecision,
     DeltaSign,
+    EventCategory,
     EventType,
     ParseSource,
     ReviewAction,
@@ -40,7 +41,7 @@ from point_audit.domain.types import (
     build_event_id,
 )
 
-DOMAIN_CONTRACT_VERSION = "0.3.0"
+DOMAIN_CONTRACT_VERSION = "0.4.0"
 
 __all__ = [
     "CalculatedRowTotals",
@@ -53,6 +54,7 @@ __all__ = [
     "DomainWarning",
     "DuplicateMatch",
     "EventCandidate",
+    "EventCategory",
     "EventType",
     "FiniteDecimal",
     "NonNegativeDecimal",
