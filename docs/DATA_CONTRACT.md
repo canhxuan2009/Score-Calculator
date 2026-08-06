@@ -1,212 +1,351 @@
-# Hợp đồng dữ liệu
+# Hợp đồng dữ liệu domain
+
+Tài liệu này mô tả đúng hợp đồng Pydantic v2 được xuất từ `point_audit.domain`. Phiên bản hiện tại là `0.2.0`, tương ứng hằng `DOMAIN_CONTRACT_VERSION`.
 
 ## 1. Quy ước chung
 
-- `contract_version`: SemVer, bắt đầu dự kiến từ `1.0.0` khi triển khai.
-- ID: chuỗi ổn định trong phạm vi một run; UUID/ULID sẽ chốt khi code.
-- Điểm: decimal dưới dạng chuỗi trong JSON, ví dụ `"4.8"`, `"-5"`; `null` nghĩa là chưa biết/không áp dụng.
-- Chỉ số hàng/cột Excel: 1-based. `source_span`: `[start, end)` 0-based trên chuỗi `cell_raw_text`.
-- Ngày chuẩn: ISO `YYYY-MM-DD`; ngày thiếu năm chưa được giả lập thành ngày đầy đủ nếu chưa có policy.
-- Tất cả enum viết hoa với dấu gạch dưới.
-- `warnings` là danh sách có thứ tự ổn định, không phải chuỗi ghép.
+- Tất cả model kế thừa `DomainModel` với `extra="forbid"`, `frozen=True` và `validate_default=True`.
+- Điểm, delta, tổng, độ tương đồng và độ tin cậy dùng `Decimal`; đầu vào `float` và `bool` bị từ chối.
+- Mọi `Decimal` phải hữu hạn. `NaN`, `Infinity` và `-Infinity` không hợp lệ.
+- `NonNegativeDecimal` yêu cầu giá trị `>= 0`.
+- `ConfidenceDecimal` yêu cầu giá trị trong đoạn `[0, 1]`.
+- JSON biểu diễn `Decimal` bằng chuỗi thập phân và `date` bằng ISO `YYYY-MM-DD`.
+- Các enum được serialize bằng giá trị chữ hoa ghi trong mục 2.
+- Chỉ số dòng/cột Excel là 1-based. `TextSpan` là đoạn `[start, end)` 0-based trên `RawCell.raw_text`.
+- Chuỗi nguồn không bị trim hoặc thay thế. `EventCandidate.raw_text` phải khớp chính xác substring của ô nguồn.
 
-## 2. RunRecord
+## 2. Enum
 
-| Trường | Kiểu | Bắt buộc | Mô tả |
-|---|---|---:|---|
-| `run_id` | string | có | định danh lần chạy |
-| `contract_version` | string | có | phiên bản schema |
-| `application_version` | string | có | phiên bản ứng dụng |
-| `started_at`, `finished_at` | datetime/null | có | UTC ISO-8601 |
-| `status` | enum | có | `RUNNING`, `FAILED`, `PARTIAL`, `PROVISIONAL`, `FINALIZED` |
-| `source` | SourceWorkbook | có | metadata nguồn |
-| `header` | HeaderMapping/null | có | kết quả nhận diện header |
-| `rule_catalog` | RuleCatalogRef | có | version/checksum |
-| `ai_context` | AiContext/null | có | model/prompt/schema version, không chứa secret |
-| `persons` | PersonResult[] | có | kết quả theo người |
-| `warnings` | Warning[] | có | cảnh báo cấp run |
+| Enum | Giá trị |
+|---|---|
+| `SourceColumn` | `SEQUENCE`, `FULL_NAME`, `BIRTH_DATE`, `GROUP`, `BASE_SCORE`, `POSITIVE_TOTAL`, `NEGATIVE_TOTAL`, `FINAL_TOTAL`, `CONDUCT`, `EVIDENCE`, `UNKNOWN` |
+| `EventType` | `BONUS`, `PENALTY`, `INFORMATIONAL`, `UNKNOWN` |
+| `DeltaSign` | `PLUS`, `MINUS` |
+| `DatePrecision` | `FULL`, `DAY_MONTH`, `MISSING`, `AMBIGUOUS` |
+| `ParseSource` | `DETERMINISTIC`, `AI`, `MANUAL`, `HYBRID` |
+| `ReviewStatus` | `UNREVIEWED`, `PENDING_REVIEW`, `AUTO_ACCEPTED`, `APPROVED`, `REJECTED` |
+| `ReviewAction` | `USE_DECLARED`, `USE_EXPECTED`, `SET_CUSTOM`, `REJECT_EVENT`, `EDIT_PARSED_FIELDS` |
+| `RuleMatchStatus` | `NO_MATCH`, `ONE_MATCH`, `AMBIGUOUS_MATCH` |
+| `TimelineItemType` | `DISCOVERED`, `PARSED`, `VALIDATED`, `RULE_MATCHED`, `DUPLICATE_FLAGGED`, `REVIEWED` |
 
-## 3. SourceWorkbook
+`WarningCode` gồm:
 
-| Trường | Kiểu | Mô tả |
+`HEADER_NOT_FOUND`, `HEADER_AMBIGUOUS`, `MISSING_REQUIRED_COLUMN`, `UNKNOWN_ROW`, `INVALID_NUMBER`, `INVALID_DATE`, `DATE_AMBIGUOUS`, `DATE_OUTSIDE_PERIOD`, `MISSING_EVENT_DATE`, `MISSING_DECLARED_DELTA`, `SEGMENTATION_AMBIGUOUS`, `AI_OUTPUT_INVALID`, `NO_RULE_MATCH`, `AMBIGUOUS_RULE_MATCH`, `RULE_CONFLICT`, `DUPLICATE_CANDIDATE`, `SOURCE_TOTAL_MISMATCH`, `UNRESOLVED_EVENT`, `INVALID_EVENT_STATE`, `MISSING_REVIEW_INFORMATION`.
+
+## 3. Kiểu dùng chung
+
+### 3.1 `TextSpan`
+
+| Field | Type | Ràng buộc |
 |---|---|---|
-| `file_name` | string | tên hiển thị, không nhất thiết là đường dẫn tuyệt đối |
-| `sha256_before` | string | hash trước xử lý |
-| `sha256_after` | string | hash sau xử lý |
-| `sheet_count` | integer | phải bằng 1 để chạy nghiệp vụ |
-| `sheet_name` | string/null | sheet được xử lý |
-| `read_only` | boolean | phải là `true` |
+| `start` | `int` | `>= 0` |
+| `end` | `int` | `> start` |
 
-Ràng buộc nghiệm thu: `sha256_before == sha256_after`.
+### 3.2 `DomainWarning`
 
-## 4. HeaderMapping và nguồn ô
-
-`HeaderMapping` gồm `header_row`, `confidence` và map từ canonical field sang `CellRef`.
-
-`CellRef`:
-
-| Trường | Kiểu | Mô tả |
+| Field | Type | Ràng buộc |
 |---|---|---|
-| `sheet_name` | string | tên sheet |
-| `row_index` | integer | 1-based |
-| `column_index` | integer | 1-based |
-| `coordinate` | string | ví dụ `J12` |
-| `header_raw` | string/null | tiêu đề vật lý nếu áp dụng |
+| `code` | `WarningCode` | bắt buộc |
+| `message_vi` | `str` | không được rỗng/trắng |
+| `blocking` | `bool` | mặc định `false` |
 
-## 5. PersonSourceRecord
+## 4. Provenance workbook
 
-| Trường | Kiểu | Mô tả |
+### 4.1 `RawCell`
+
+| Field | Type | Ràng buộc |
 |---|---|---|
-| `person_id` | string | ID nội bộ, không chỉ dựa vào tên |
-| `source_row` | integer | hàng nguồn |
-| `row_class` | enum | `PERSON_ROW` đối với record hợp lệ |
-| `sequence_raw` | scalar/null | TT gốc |
-| `full_name_raw` | string | họ tên nguyên bản |
-| `birth_date_raw` | scalar/null | ngày sinh nguyên bản |
-| `group_raw` | scalar/null | tổ nguyên bản |
-| `base_score_raw` | scalar/null | điểm gốc nguyên bản |
-| `base_score` | decimal/null | điểm gốc parse được |
-| `source_bonus_raw` | scalar/null | điểm cộng trong file |
-| `source_bonus` | decimal/null | giá trị parse được |
-| `source_penalty_raw` | scalar/null | điểm trừ trong file, quy ước độ lớn không âm |
-| `source_penalty` | decimal/null | giá trị parse được |
-| `source_total_raw` | scalar/null | tổng trong file |
-| `source_total` | decimal/null | giá trị parse được |
-| `conduct_raw` | scalar/null | hạnh kiểm gốc |
-| `evidence_cell` | EvidenceCell | nguồn Minh chứng |
-| `warnings` | Warning[] | cảnh báo hàng |
+| `source_file_sha256` | `str` | đúng 64 ký tự hex, chuẩn hóa lowercase |
+| `sheet_name` | `str` | không rỗng |
+| `excel_row` | `int` | `>= 1` |
+| `excel_column` | `int` | `>= 1` |
+| `source_column` | `SourceColumn` | cột chuẩn |
+| `source_column_name` | `str` | tên header vật lý, không rỗng |
+| `raw_text` | `str` | văn bản ô nguyên bản; có thể rỗng đối với ô nguồn |
 
-## 6. EvidenceCell
+### 4.2 `RawWorkbookRow`
 
-| Trường | Kiểu | Mô tả |
+| Field | Type | Ràng buộc |
 |---|---|---|
-| `cell_ref` | CellRef | tọa độ nguồn |
-| `cell_raw_text` | string | toàn bộ văn bản ô, không sửa |
-| `events` | EventRecord[] | sự kiện theo thứ tự nguồn |
+| `source_file_sha256` | `str` | SHA-256 nguồn |
+| `sheet_name` | `str` | không rỗng |
+| `excel_row` | `int` | `>= 1` |
+| `cells` | `tuple[RawCell, ...]` | ít nhất một ô |
 
-## 7. EventRecord
+Mọi cell phải cùng hash file, sheet và dòng với row. Không được lặp `excel_column` trong một row.
 
-| Trường | Kiểu | Bắt buộc | Mô tả |
-|---|---|---:|---|
-| `event_id` | string | có | ID ổn định trong run |
-| `person_id` | string | có | tham chiếu người |
-| `source_cell` | CellRef | có | hàng/cột/ô nguồn |
-| `source_span` | object/null | có | `start`, `end`; null nếu không xác định an toàn |
-| `raw_text` | string | có | văn bản sự kiện nguyên bản |
-| `normalized_content` | string | có | nội dung chuẩn hóa phục vụ khớp |
-| `event_date_raw` | string/null | có | ngày như được viết |
-| `event_date` | date/null | có | ngày ISO khi xác định đủ |
-| `subject` | string/null | có | mã/tên môn chuẩn |
-| `subject_score_raw` | string/null | có | điểm môn nguyên bản |
-| `subject_score` | decimal/null | có | điểm môn đã parse |
-| `declared_delta_raw` | string/null | có | delta nguyên bản |
-| `declared_delta` | decimal/null | có | delta có dấu trong Minh chứng |
-| `expected_delta` | decimal/null | có | delta do Rule Engine tạo |
-| `final_delta` | decimal/null | có | delta cuối đã được phép dùng |
-| `matched_rule` | RuleMatch/null | có | rule và trace |
-| `parse_confidence` | decimal | có | `[0,1]`, không phải xác suất pháp lý |
-| `warnings` | Warning[] | có | cảnh báo event |
-| `review_status` | enum | có | trạng thái duyệt |
-| `review_decision_id` | string/null | có | quyết định gần nhất |
-| `duplicate_group_id` | string/null | có | nhóm nghi trùng |
+## 5. Sự kiện
 
-Ràng buộc:
+### 5.1 Event ID ổn định
 
-1. `raw_text` phải bằng substring theo `source_span` nếu span tồn tại.
-2. `expected_delta` chỉ tồn tại khi có đúng một rule hợp lệ hoặc quyết định có trace tương đương theo policy.
-3. Có `RULE_CONFLICT` ⇒ `review_status = PENDING_REVIEW` và `final_delta = null` cho tới khi có quyết định người dùng.
-4. `review_status = AUTO_ACCEPTED` hoặc `APPROVED` và sự kiện được tính ⇒ `final_delta != null`.
-5. `review_status = REJECTED` ⇒ `final_delta = null`.
-6. `declared_delta`, `expected_delta`, `final_delta` là số có dấu: cộng dương, trừ âm.
+`build_event_id` tạo chuỗi `evt_<sha256>` từ đúng các thành phần sau, nối bằng ký tự phân cách ổn định:
 
-## 8. RuleCatalog và RuleMatch
+1. `source_file_sha256`;
+2. `sheet_name`;
+3. `excel_row`;
+4. `excel_column`;
+5. `source_column_name`;
+6. `source_span.start` và `source_span.end`;
+7. `candidate_index`;
+8. `raw_text`.
 
-`RuleCatalogRef`:
+Nếu caller cung cấp `event_id` không khớp giá trị trên, model bị từ chối. Nếu bỏ trống, model tự sinh ID.
 
-- `catalog_id`
-- `version`
-- `effective_from`, `effective_to`
-- `sha256`
+### 5.2 `EventCandidate`
 
-Một rule logic tối thiểu gồm:
-
-- `rule_id`, `version`, `name`, `priority`, `enabled`;
-- thời gian hiệu lực;
-- điều kiện có cấu trúc (event type, subject, score range, achievement, keyword/alias đã duyệt...);
-- `delta` có dấu;
-- `explanation` và examples/tests.
-
-`RuleMatch`:
-
-| Trường | Kiểu | Mô tả |
+| Field | Type | Ràng buộc |
 |---|---|---|
-| `status` | enum | `NO_MATCH`, `ONE_MATCH`, `AMBIGUOUS_MATCH` |
-| `rule_id` | string/null | chỉ có khi `ONE_MATCH` |
-| `rule_version` | string/null | phiên bản rule |
-| `candidate_rule_ids` | string[] | ứng viên đã xét/đồng hạng |
-| `trace` | object[] | điều kiện và kết quả, không chứa suy luận AI tự do |
+| `event_id` | `str` | ID ổn định được kiểm tra/tự sinh |
+| `person_id` | `str` | không rỗng |
+| `source_cell` | `RawCell` | phải thuộc `SourceColumn.EVIDENCE` |
+| `source_span` | `TextSpan` | nằm trong `source_cell.raw_text` |
+| `candidate_index` | `int` | `>= 0` |
+| `raw_text` | `str` | không rỗng, bằng chính xác source substring |
+| `parse_source` | `ParseSource` | nguồn phân tích |
+| `reported_confidence` | `ConfidenceDecimal | None` | độ tin cậy do parser/AI tự khai; không phải kết quả cuối |
+| `warnings` | `tuple[DomainWarning, ...]` | mặc định rỗng |
 
-## 9. ReviewDecision
+### 5.3 `ParsedEvent`
 
-| Trường | Kiểu | Mô tả |
+`ParsedEvent` kế thừa toàn bộ field/ràng buộc của `EventCandidate` và bổ sung:
+
+| Field | Type | Ý nghĩa/ràng buộc |
 |---|---|---|
-| `decision_id` | string | ID append-only |
-| `event_id` | string | sự kiện được duyệt |
-| `action` | enum | `USE_DECLARED`, `USE_EXPECTED`, `SET_CUSTOM`, `REJECT_EVENT`, `EDIT_PARSED_FIELDS` |
-| `final_delta` | decimal/null | bắt buộc với ba action chọn/đặt điểm |
-| `reason` | string | bắt buộc, không rỗng |
-| `reviewer_id` | string | người/hệ thống theo policy |
-| `created_at` | datetime | UTC ISO-8601 |
-| `previous_decision_id` | string/null | chuỗi lịch sử |
+| `event_type` | `EventType` | hướng cộng/trừ/thông tin/chưa rõ |
+| `description` | `str` | mô tả chuẩn hóa, không rỗng |
+| `evidence_text` | `str` | minh chứng phải còn nguyên trong `raw_text` |
+| `academic_score` | `Decimal | None` | điểm bài kiểm tra/môn học |
+| `declared_delta` | `Decimal | None` | delta có dấu ghi trong Minh chứng |
+| `expected_delta` | `Decimal | None` | delta có dấu do rule Python tạo |
+| `final_delta` | `Decimal | None` | delta cuối chỉ có sau auto-accept/duyệt |
+| `declared_delta_sign` | `DeltaSign | None` | dấu được viết trong nguồn |
+| `academic_score_span` | `TextSpan | None` | span điểm bài kiểm tra |
+| `declared_delta_span` | `TextSpan | None` | span delta khai báo |
+| `date_span` | `TextSpan | None` | span ngày |
+| `event_date_text` | `str | None` | ngày như được viết |
+| `event_date` | `date | None` | chỉ dùng khi `FULL` |
+| `event_day` | `int | None` | `1..31`, dùng cho `DAY_MONTH` |
+| `event_month` | `int | None` | `1..12`, dùng cho `DAY_MONTH` |
+| `date_precision` | `DatePrecision` | trạng thái ngày tường minh |
+| `matched_rule_id` | `str | None` | rule duy nhất được khớp |
+| `rule_match_confidence` | `ConfidenceDecimal | None` | confidence của rule match |
+| `final_confidence` | `ConfidenceDecimal` | confidence cuối sau kiểm tra Python |
+| `requires_review` | `bool` | có cần người duyệt hay không |
+| `review_status` | `ReviewStatus` | mặc định `UNREVIEWED` |
+| `review_record_id` | `str | None` | liên kết quyết định duyệt |
 
-`EDIT_PARSED_FIELDS` không tự phê duyệt điểm; nó tạo phiên bản event mới hoặc revision, chạy lại rule engine rồi trở về policy duyệt.
+Các bất biến của `ParsedEvent`:
 
-## 10. Review status
+- `academic_score` và `academic_score_span` phải cùng tồn tại hoặc cùng `null`.
+- `declared_delta`, `declared_delta_span`, `declared_delta_sign` phải cùng tồn tại hoặc cùng `null`; dấu phải khớp giá trị.
+- Các span con phải nằm trong `source_span`.
+- `FULL`: có `event_date`, `event_date_text`, `date_span`; không có `event_day/month`.
+- `DAY_MONTH`: không có `event_date`; bắt buộc day, month, raw date text và span. Ngày/tháng phải có thể tồn tại trong ít nhất một năm; ví dụ 31/2 bị từ chối, 29/2 được giữ.
+- `MISSING`: không mang bất kỳ giá trị/span ngày nào và phải có warning `MISSING_EVENT_DATE`.
+- `AMBIGUOUS`: không có ngày đầy đủ, phải giữ text mơ hồ, có warning `DATE_AMBIGUOUS` và `requires_review=true`.
+- `matched_rule_id`, `expected_delta`, `rule_match_confidence` phải cùng tồn tại hoặc cùng `null`.
+- `BONUS` không nhận delta âm; `PENALTY` không nhận delta dương; `INFORMATIONAL` không nhận delta.
+- `UNKNOWN` luôn yêu cầu duyệt.
+- Khi `declared_delta != expected_delta`: bắt buộc `RULE_CONFLICT`, `PENDING_REVIEW`, `requires_review=true`, `final_delta=null`.
+- `AUTO_ACCEPTED`/`APPROVED`: bắt buộc `final_delta` và `review_record_id`, đồng thời `requires_review=false`.
+- `REJECTED`: bắt buộc `review_record_id`, `final_delta=null`, `requires_review=false`.
+- `UNREVIEWED`/`PENDING_REVIEW` không được chứa final review data.
 
-- `UNREVIEWED`: đã parse nhưng chưa đủ điều kiện quyết định.
-- `PENDING_REVIEW`: có cảnh báo chặn hoặc cần lựa chọn người dùng.
-- `AUTO_ACCEPTED`: policy xác định đã đặt final an toàn.
-- `APPROVED`: người dùng đã duyệt.
-- `REJECTED`: người dùng loại sự kiện.
+`reported_confidence` và `final_confidence` là hai field độc lập. Giá trị AI tự khai không bao giờ tự động trở thành confidence cuối.
 
-## 11. PersonResult và công thức
+## 6. Validation và duplicate
 
-| Trường | Kiểu | Mô tả |
+### 6.1 `ValidationResult`
+
+| Field | Type |
+|---|---|
+| `is_valid` | `bool` |
+| `warnings` | `tuple[DomainWarning, ...]` |
+| `errors` | `tuple[str, ...]` |
+| `requires_review` | `bool` |
+
+Kết quả hợp lệ không có errors; kết quả không hợp lệ phải có ít nhất một error không rỗng. Error hoặc warning blocking bắt buộc `requires_review=true`.
+
+### 6.2 `DuplicateMatch`
+
+| Field | Type | Ràng buộc |
 |---|---|---|
-| `person` | PersonSourceRecord | dữ liệu nguồn |
-| `calculation_status` | enum | `BLOCKED`, `PROVISIONAL`, `FINALIZED` |
-| `calculated_bonus` | decimal/null | tổng delta dương |
-| `calculated_penalty` | decimal/null | tổng trị tuyệt đối delta âm |
-| `calculated_total` | decimal/null | tổng mới |
-| `bonus_difference` | decimal/null | mới trừ nguồn |
-| `penalty_difference` | decimal/null | mới trừ nguồn |
-| `total_difference` | decimal/null | mới trừ nguồn |
-| `blocking_event_count` | integer | số event chưa giải quyết |
-| `warnings` | Warning[] | cảnh báo đối soát |
+| `event_id` | `str` | sự kiện gốc |
+| `duplicate_event_id` | `str` | phải khác `event_id` |
+| `similarity_score` | `ConfidenceDecimal` | `[0,1]` |
+| `reasons` | `tuple[str, ...]` | ít nhất một lý do không rỗng |
+| `requires_review` | `bool` | luôn phải là `true` |
 
-Với `included_events = status in {AUTO_ACCEPTED, APPROVED} and final_delta != null`:
+Model không có trạng thái tự xóa hoặc tự gộp sự kiện.
+
+## 7. Review và timeline
+
+### 7.1 `ReviewRecord`
+
+| Field | Type |
+|---|---|
+| `review_id` | `str` |
+| `event_id` | `str` |
+| `status` | `ReviewStatus` |
+| `action` | `ReviewAction | None` |
+| `reviewer_id` | `str | None` |
+| `reviewed_at` | `datetime | None` |
+| `reason` | `str | None` |
+| `final_delta` | `Decimal | None` |
+| `previous_review_id` | `str | None` |
+
+`AUTO_ACCEPTED`, `APPROVED`, `REJECTED` đều cần action, reviewer, thời gian có timezone và lý do. Hai trạng thái accepted cần `final_delta` và không được dùng `REJECT_EVENT`. `REJECTED` chỉ dùng `REJECT_EVENT` và không có `final_delta`. Trạng thái chưa hoàn tất không được mang decision metadata.
+
+### 7.2 `TimelineItem`
+
+| Field | Type |
+|---|---|
+| `item_id` | `str` |
+| `person_id` | `str` |
+| `event_id` | `str | None` |
+| `item_type` | `TimelineItemType` |
+| `occurred_at` | timezone-aware `datetime` |
+| `description` | `str` |
+| `actor_id` | `str` |
+
+Các trường text bắt buộc không rỗng.
+
+## 8. Kỳ tính điểm và kiểm tra ngày
+
+### 8.1 `ScoringPeriod`
+
+| Field | Type |
+|---|---|
+| `period_id` | `str` |
+| `name` | `str` |
+| `starts_on` | `date` |
+| `ends_on` | `date` |
+| `academic_year_label` | `str` |
+
+Khoảng thời gian bao gồm cả hai đầu và `ends_on >= starts_on`.
+
+### 8.2 `DatePeriodValidation`
+
+| Field | Type |
+|---|---|
+| `event_id` | `str` |
+| `scoring_period` | `ScoringPeriod` |
+| `date_precision` | `DatePrecision` |
+| `event_date` | `date | None` |
+| `event_day` | `int | None` |
+| `event_month` | `int | None` |
+| `candidate_dates` | `tuple[date, ...]` |
+| `is_within_period` | `bool | None` |
+| `warnings` | `tuple[DomainWarning, ...]` |
+
+- `FULL`: `is_within_period` phải khớp phép so sánh với period; ngoài kỳ cần `DATE_OUTSIDE_PERIOD`.
+- `DAY_MONTH`: không có `event_date`; `candidate_dates` chỉ là các ngày đầy đủ khả dĩ nằm trong period và giữ đúng day/month. Đây không phải hành động tự gán năm. `is_within_period` phản ánh có/không candidate.
+- `MISSING`/`AMBIGUOUS`: không có resolved date/period result và phải có warning tương ứng.
+
+## 9. Tổng điểm và đối soát
+
+### 9.1 `DeclaredRowTotals`
+
+| Field | Type |
+|---|---|
+| `base_score` | `Decimal | None` |
+| `positive_total` | non-negative `Decimal | None` |
+| `negative_total` | non-negative `Decimal | None` |
+| `final_total` | `Decimal | None` |
+
+Đây là số người dùng nhập nên model không ép công thức nội bộ phải đúng.
+
+### 9.2 `CalculatedRowTotals`
+
+Có cùng bốn field và kiểu như `DeclaredRowTotals`. Khi cả bốn tồn tại, bắt buộc:
 
 ```text
-calculated_bonus   = Σ max(final_delta, 0)
-calculated_penalty = Σ abs(min(final_delta, 0))
-calculated_total   = base_score + calculated_bonus - calculated_penalty
-bonus_difference   = calculated_bonus - source_bonus
-penalty_difference = calculated_penalty - source_penalty
-total_difference   = calculated_total - source_total
+final_total = base_score + positive_total - negative_total
 ```
 
-Nếu `base_score` thiếu/không hợp lệ, `calculated_total = null` và status `BLOCKED`. Nếu một source comparison value là null, difference tương ứng là null.
+### 9.3 `PersonReconciliation`
 
-## 12. Warning
+| Field | Type |
+|---|---|
+| `declared_positive_total` | non-negative `Decimal | None` |
+| `declared_negative_total` | non-negative `Decimal | None` |
+| `declared_final_total` | `Decimal | None` |
+| `calculated_positive_total` | non-negative `Decimal | None` |
+| `calculated_negative_total` | non-negative `Decimal | None` |
+| `calculated_final_total` | `Decimal | None` |
+| `positive_difference` | `Decimal | None` |
+| `negative_difference` | `Decimal | None` |
+| `final_difference` | `Decimal | None` |
+| `unresolved_event_count` | `int >= 0` |
 
-| Trường | Kiểu | Mô tả |
-|---|---|---|
-| `code` | enum/string ổn định | mã máy đọc được |
-| `severity` | enum | `INFO`, `WARNING`, `ERROR`, `BLOCKING` |
-| `message_vi` | string | thông điệp cho người dùng |
-| `scope` | enum | `RUN`, `ROW`, `CELL`, `EVENT`, `CALCULATION` |
-| `source_ref` | CellRef/null | nguồn nếu có |
-| `details` | object | dữ liệu có cấu trúc, đã giảm PII |
+Mỗi difference bằng `calculated - declared`. Nếu cả hai total có mặt và difference bị bỏ trống, model tính chính xác bằng `Decimal`; nếu caller đưa difference sai, model từ chối. Nếu một total thiếu, difference tương ứng phải `null`.
 
-`RULE_CONFLICT`, `AMBIGUOUS_RULE_MATCH`, `DUPLICATE_CANDIDATE` và `UNRESOLVED_EVENT` mặc định là cảnh báo chặn event cho tới khi reviewer quyết định.
+`from_totals` tạo reconciliation từ `DeclaredRowTotals` và `CalculatedRowTotals`.
 
+## 10. Rule
+
+### 10.1 `RuleDefinition`
+
+| Field | Type |
+|---|---|
+| `rule_id`, `version`, `name` | `str` không rỗng |
+| `event_type` | `EventType` |
+| `expected_delta` | `Decimal` hữu hạn, đúng hướng event |
+| `priority` | `int >= 0` |
+| `enabled` | `bool`, mặc định `true` |
+| `effective_from`, `effective_to` | `date | None` |
+| `academic_score_min`, `academic_score_max` | `Decimal | None` |
+| `description_keywords` | unique `tuple[str, ...]` không rỗng |
+| `scoring_period_ids` | `tuple[str, ...]` không rỗng |
+| `requires_event_date` | `bool` |
+
+Rule không được dùng `UNKNOWN`, sai hướng delta, khoảng score đảo hoặc khoảng hiệu lực đảo.
+
+### 10.2 `RuleMatch`
+
+| Field | Type |
+|---|---|
+| `event_id` | `str` |
+| `status` | `RuleMatchStatus` |
+| `matched_rule_id` | `str | None` |
+| `candidate_rule_ids` | `tuple[str, ...]` |
+| `expected_delta` | `Decimal | None` |
+| `confidence` | `ConfidenceDecimal | None` |
+| `trace` | `tuple[str, ...]` |
+
+- `NO_MATCH`: không có selected rule/delta/confidence.
+- `ONE_MATCH`: có rule ID, delta, confidence; selected ID phải thuộc candidates.
+- `AMBIGUOUS_MATCH`: có ít nhất hai candidates và không được chọn rule/delta.
+
+### 10.3 `RuleConflict`
+
+| Field | Type |
+|---|---|
+| `event_id`, `rule_id` | `str` |
+| `declared_delta`, `expected_delta` | `Decimal`, phải khác nhau |
+| `warning_code` | luôn `RULE_CONFLICT` |
+| `resolved` | `bool`, mặc định `false` |
+| `resolved_delta` | `Decimal | None` |
+| `review_record_id` | `str | None` |
+
+Conflict chưa giải quyết không có resolution data. Conflict đã giải quyết phải có cả `resolved_delta` và `review_record_id`.
+
+## 11. `PersonSummary`
+
+| Field | Type |
+|---|---|
+| `person_id` | `str` |
+| `full_name` | `str` |
+| `sheet_name` | `str` |
+| `excel_row` | `int >= 1` |
+| `scoring_period_id` | `str` |
+| `reconciliation` | `PersonReconciliation` |
+| `event_ids` | unique `tuple[str, ...]` |
+| `warnings` | `tuple[DomainWarning, ...]` |
+| `requires_review` | `bool` |
+
+`requires_review` phải đúng khi `unresolved_event_count > 0` hoặc có warning blocking.
+
+## 12. Compatibility và migration
+
+Đây là phiên bản code đầu tiên của domain contract. Nó thay thế các tên thiết kế cũ `PersonSourceRecord`, `EvidenceCell`, `EventRecord`, `ReviewDecision` và `PersonResult` trong bản đặc tả trước bằng các model code ở trên. Chưa có dữ liệu persistence sản xuất nên không cần migration vật lý. Mọi thay đổi sau `0.2.0` phải cập nhật đồng thời code, test fixture, tài liệu này và version contract.
