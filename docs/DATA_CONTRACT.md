@@ -1,6 +1,6 @@
 # Hợp đồng dữ liệu domain
 
-Tài liệu này mô tả đúng hợp đồng Pydantic v2 được xuất từ `point_audit.domain`. Phiên bản hiện tại là `0.2.0`, tương ứng hằng `DOMAIN_CONTRACT_VERSION`.
+Tài liệu này mô tả đúng hợp đồng Pydantic v2 của `point_audit.domain` và kết quả đọc workbook tại `point_audit.ingestion`. Phiên bản hiện tại là `0.3.0`, tương ứng hằng `DOMAIN_CONTRACT_VERSION`.
 
 ## 1. Quy ước chung
 
@@ -30,7 +30,7 @@ Tài liệu này mô tả đúng hợp đồng Pydantic v2 được xuất từ 
 
 `WarningCode` gồm:
 
-`HEADER_NOT_FOUND`, `HEADER_AMBIGUOUS`, `MISSING_REQUIRED_COLUMN`, `UNKNOWN_ROW`, `INVALID_NUMBER`, `INVALID_DATE`, `DATE_AMBIGUOUS`, `DATE_OUTSIDE_PERIOD`, `MISSING_EVENT_DATE`, `MISSING_DECLARED_DELTA`, `SEGMENTATION_AMBIGUOUS`, `AI_OUTPUT_INVALID`, `NO_RULE_MATCH`, `AMBIGUOUS_RULE_MATCH`, `RULE_CONFLICT`, `DUPLICATE_CANDIDATE`, `SOURCE_TOTAL_MISMATCH`, `UNRESOLVED_EVENT`, `INVALID_EVENT_STATE`, `MISSING_REVIEW_INFORMATION`.
+`HEADER_NOT_FOUND`, `HEADER_AMBIGUOUS`, `MISSING_REQUIRED_COLUMN`, `UNKNOWN_ROW`, `INVALID_NUMBER`, `INVALID_DATE`, `DATE_AMBIGUOUS`, `DATE_OUTSIDE_PERIOD`, `MISSING_EVENT_DATE`, `MISSING_DECLARED_DELTA`, `SEGMENTATION_AMBIGUOUS`, `AI_OUTPUT_INVALID`, `NO_RULE_MATCH`, `AMBIGUOUS_RULE_MATCH`, `RULE_CONFLICT`, `DUPLICATE_CANDIDATE`, `SOURCE_TOTAL_MISMATCH`, `ROW_FORMULA_MISMATCH`, `UNRESOLVED_EVENT`, `INVALID_EVENT_STATE`, `MISSING_REVIEW_INFORMATION`.
 
 ## 3. Kiểu dùng chung
 
@@ -62,6 +62,8 @@ Tài liệu này mô tả đúng hợp đồng Pydantic v2 được xuất từ 
 | `source_column` | `SourceColumn` | cột chuẩn |
 | `source_column_name` | `str` | tên header vật lý, không rỗng |
 | `raw_text` | `str` | văn bản ô nguyên bản; có thể rỗng đối với ô nguồn |
+| `formula` | `str | None` | công thức nguyên bản, phải bắt đầu bằng `=` và bằng `raw_text` |
+| `cached_value_text` | `str | None` | giá trị tính sẵn được lưu trong file; chỉ hợp lệ khi có `formula` |
 
 ### 4.2 `RawWorkbookRow`
 
@@ -73,6 +75,72 @@ Tài liệu này mô tả đúng hợp đồng Pydantic v2 được xuất từ 
 | `cells` | `tuple[RawCell, ...]` | ít nhất một ô |
 
 Mọi cell phải cùng hash file, sheet và dòng với row. Không được lặp `excel_column` trong một row.
+
+### 4.3 `DetectedColumn`
+
+| Field | Type | Ràng buộc |
+|---|---|---|
+| `source_column` | `SourceColumn` | cột chuẩn được nhận diện |
+| `excel_column` | `int` | `>= 1` |
+| `source_column_name` | `str` | header vật lý nguyên bản, không rỗng |
+
+### 4.4 `IngestedStudentRow`
+
+| Field | Type | Ý nghĩa/ràng buộc |
+|---|---|---|
+| `source_file_sha256` | `str` | hash file nguồn |
+| `sheet_name` | `str` | sheet nguồn |
+| `excel_row` | `int` | dòng Excel 1-based |
+| `sequence_raw` | `str | None` | TT nguyên bản |
+| `sequence_number` | `int | None` | TT số nguyên không âm nếu parse được |
+| `full_name_raw` | `str | None` | họ tên nguyên bản |
+| `birth_date_raw` | `str | None` | ngày sinh nguyên bản, kể cả serial/công thức |
+| `birth_date` | `date | None` | ngày sinh đã parse; không phải ngày sự kiện |
+| `group_raw` | `str | None` | tổ nguyên bản |
+| `base_score_raw` | `str | None` | Điểm gốc nguyên bản |
+| `base_score` | `Decimal | None` | Điểm gốc parse được |
+| `declared_positive_raw` | `str | None` | Điểm cộng khai báo nguyên bản |
+| `declared_positive_total` | non-negative `Decimal | None` | Điểm cộng khai báo parse được |
+| `declared_negative_raw` | `str | None` | Điểm trừ khai báo nguyên bản |
+| `declared_negative_total` | non-negative `Decimal | None` | Điểm trừ khai báo parse được |
+| `declared_final_raw` | `str | None` | Tổng khai báo nguyên bản |
+| `declared_final_total` | `Decimal | None` | Tổng khai báo parse được |
+| `conduct_raw` | `str | None` | hạnh kiểm nguyên bản |
+| `evidence_raw` | `str` | Minh chứng nguyên bản, có thể rỗng |
+| `raw_row` | `RawWorkbookRow` | toàn bộ ô cột đã ánh xạ với provenance |
+| `warnings` | `tuple[DomainWarning, ...]` | cảnh báo mức dòng |
+
+Một dòng được giữ khi có `sequence_number` và/hoặc `full_name_raw` không rỗng. `raw_row` phải cùng hash, sheet và dòng. Ngày sinh chỉ là thuộc tính người; ingestion không tạo `ParsedEvent` và không chuyển ngày sinh sang `event_date`.
+
+### 4.5 `WorkbookIngestionResult`
+
+| Field | Type | Ý nghĩa/ràng buộc |
+|---|---|---|
+| `source_file_name` | `str` | tên file, không chứa nội dung workbook |
+| `source_file_sha256` | `str` | SHA-256 trước và sau khi đọc phải giống nhau |
+| `sheet_name` | `str` | sheet duy nhất |
+| `header_row` | `int` | dòng tiêu đề nhận diện, `>= 1` |
+| `columns` | `tuple[DetectedColumn, ...]` | ít nhất 5 cột, không lặp cột chuẩn |
+| `scoring_period` | `ScoringPeriod | None` | kỳ nhận diện từ vùng trên header |
+| `students` | `tuple[IngestedStudentRow, ...]` | các dòng học sinh |
+| `stopped_at_row` | `int | None` | dòng bắt đầu footer/summary nếu gặp |
+| `formulas_found` | `bool` | có ít nhất một công thức trong các ô đã đọc |
+| `cached_formula_values_found` | `bool` | có ít nhất một giá trị công thức tính sẵn |
+| `warnings` | `tuple[DomainWarning, ...]` | cảnh báo cấp workbook |
+
+`cached_formula_values_found=true` chỉ hợp lệ khi `formulas_found=true`. Mọi student phải cùng file/sheet và nằm sau `header_row`.
+
+### 4.6 Hợp đồng `WorkbookReader`
+
+- Chỉ chấp nhận workbook có đúng một sheet; không chọn hoặc gộp nhiều sheet.
+- Mở file hai lần ở chế độ read-only: `data_only=false` để giữ công thức và `data_only=true` để đọc cached value nếu file có lưu. Không gọi `save`.
+- Header là duy nhất và phải có đồng thời `Họ và tên`, `Điểm cộng`, `Điểm trừ`, `Tổng`, `Minh chứng` sau chuẩn hóa alias. Không tìm thấy hoặc có nhiều candidate là lỗi dừng.
+- Vùng trên header được quét để nhận diện khoảng có hai ngày đầy đủ, ví dụ `Đợt 6: Từ 28/02/2026 – 03/04/2026`; không nhận diện được thì `scoring_period=null`.
+- Dòng học sinh được nhận diện bằng TT số và/hoặc Họ và tên. Khi gặp `TỔNG HỢP`, `Thành tích lớp`, `GVCN` ở vùng định danh dòng, reader dừng và không coi dòng đó/các dòng sau là học sinh.
+- Ngày sinh nhận Excel date, chuỗi ngày và serial number theo epoch của workbook. Parse lỗi tạo `INVALID_DATE` nhưng vẫn giữ dòng.
+- Điểm nguồn được chuyển qua chuỗi sang `Decimal`, không lưu `float`. Số thiếu khác số `0`; số sai tạo `INVALID_NUMBER`.
+- Khi đủ bốn số và `declared_final_total != base_score + declared_positive_total - declared_negative_total`, reader thêm `ROW_FORMULA_MISMATCH` nhưng giữ nguyên dòng và dữ liệu khai báo.
+- Hash file được tính lại sau khi đóng workbook; thay đổi trong lúc đọc là lỗi dừng `SourceWorkbookChangedError`.
 
 ## 5. Sự kiện
 
@@ -348,4 +416,4 @@ Conflict chưa giải quyết không có resolution data. Conflict đã giải q
 
 ## 12. Compatibility và migration
 
-Đây là phiên bản code đầu tiên của domain contract. Nó thay thế các tên thiết kế cũ `PersonSourceRecord`, `EvidenceCell`, `EventRecord`, `ReviewDecision` và `PersonResult` trong bản đặc tả trước bằng các model code ở trên. Chưa có dữ liệu persistence sản xuất nên không cần migration vật lý. Mọi thay đổi sau `0.2.0` phải cập nhật đồng thời code, test fixture, tài liệu này và version contract.
+Phiên bản `0.3.0` là thay đổi cộng thêm so với `0.2.0`: bổ sung `RawCell.formula`, `RawCell.cached_value_text`, `ROW_FORMULA_MISMATCH` và ba model kết quả ingestion. Không có dữ liệu persistence sản xuất nên chưa cần migration vật lý; payload `0.2.0` vẫn validate vì hai field mới của `RawCell` đều mặc định `null`. Mọi thay đổi sau `0.3.0` phải cập nhật đồng thời code, test fixture, tài liệu này và version contract.
