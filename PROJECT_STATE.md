@@ -2,11 +2,31 @@
 
 ## Trạng thái hiện tại
 
-- Giai đoạn: `Specification / pre-implementation`.
-- Repository ban đầu: trống.
-- Code sản phẩm: chưa có, đúng theo yêu cầu.
+- Giai đoạn: `Milestone 1 — project skeleton / in progress`.
+- Repository ban đầu chỉ có tài liệu đặc tả; skeleton Python 3.12 hiện đã được tạo.
+- Logic nghiệp vụ phân tích Minh chứng, áp dụng quy tắc và tính điểm: chưa triển khai.
 - Tài liệu nền tảng: đã thiết kế trong bộ tài liệu này.
-- Ngày cập nhật: 2026-08-05.
+- Ngày cập nhật: 2026-08-06.
+
+## Khung kỹ thuật hiện có
+
+- Package theo `src` layout tại `src/point_audit` cùng các ranh giới module đã nêu trong kiến trúc.
+- CLI `python -m point_audit --help` và console script `point-audit`.
+- Streamlit entry point tại `app.py`; giao diện hiện chỉ là trang khởi động.
+- Cấu hình Pydantic v2 đọc từ biến môi trường; `AI_ENABLED` mặc định là `false`.
+- OpenAI SDK là optional dependency, không cần để import package, chạy CLI hoặc khởi động UI.
+- Tooling và cấu hình cho pytest, Ruff và mypy strict trong `pyproject.toml`.
+- Smoke tests xác minh package import và CLI help hoạt động.
+
+## Kiểm tra gần nhất
+
+Chạy trong Python 3.12.13 với môi trường `.venv` cục bộ:
+
+- `pytest`: đạt, `3 passed`.
+- `ruff check .`: đạt, không có lỗi.
+- `mypy src/point_audit app.py`: đạt, 15 source files không có lỗi.
+- `python -m point_audit --help`: exit code 0.
+- Streamlit `AppTest` khi `AI_ENABLED=false` và không có API key: đạt.
 
 ## Phạm vi đã chốt ở mức đặc tả
 
@@ -43,5 +63,4 @@ Chi tiết và đề xuất mặc định nằm trong `docs/ASSUMPTIONS.md`.
 1. Người dùng xác nhận các câu hỏi chặn trong `docs/ASSUMPTIONS.md`.
 2. Bổ sung bảng quy tắc phiên bản đầu tiên cùng ví dụ đúng/sai đã ẩn danh.
 3. Chốt hợp đồng đầu ra và luồng duyệt.
-4. Sau đó mới tạo skeleton, fixture và kiểm thử ở Milestone 1 của roadmap.
-
+4. Tiếp tục Milestone 1 bằng domain schema, input guard và fixture bất biến nguồn sau khi dữ liệu mẫu/phạm vi tương ứng được xác nhận.
