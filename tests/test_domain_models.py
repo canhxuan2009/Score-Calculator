@@ -17,6 +17,7 @@ from point_audit.domain import (
     DomainWarning,
     DuplicateMatch,
     EventCandidate,
+    EventCategory,
     EventType,
     ParsedEvent,
     ParseSource,
@@ -229,6 +230,30 @@ def test_parsed_event_keeps_day_month_without_inventing_year() -> None:
     assert event.event_day == 13
     assert event.event_month == 3
     assert event.event_date is None
+    assert not event.date_year_inferred
+    assert event.event_category is EventCategory.OTHER
+
+
+def test_subject_and_span_must_appear_together() -> None:
+    event = _parsed_event(subject="LY", subject_span=TextSpan(start=3, end=5))
+
+    assert event.subject == "LY"
+    with pytest.raises(ValidationError, match="subject and subject_span"):
+        _parsed_event(subject="LY")
+
+
+def test_inferred_year_requires_a_full_date() -> None:
+    with pytest.raises(ValidationError, match="only valid for a FULL date"):
+        _parsed_event(date_year_inferred=True)
+
+    event = _parsed_event(
+        date_precision=DatePrecision.FULL,
+        event_date=date(2026, 3, 13),
+        event_day=None,
+        event_month=None,
+        date_year_inferred=True,
+    )
+    assert event.date_year_inferred
 
 
 def test_parsed_event_rejects_nonexistent_day_month() -> None:
