@@ -2,10 +2,10 @@
 
 ## Trạng thái hiện tại
 
-- Giai đoạn: `Milestone 1 input guard + Milestone 2 ingestion baseline + Milestone 3 deterministic segmenter / in progress`.
+- Giai đoạn: `Milestone 1 input guard + Milestone 2 ingestion baseline + Milestone 3 deterministic parser / in progress`.
 - Repository ban đầu chỉ có tài liệu đặc tả; skeleton Python 3.12 hiện đã được tạo.
-- Lớp đọc workbook một sheet và bộ tách sự kiện Minh chứng thuần Python đã triển khai;
-  semantic parser, áp dụng quy tắc và tính điểm cuối vẫn chưa triển khai.
+- Lớp đọc workbook một sheet, bộ tách sự kiện và semantic parser Minh chứng thuần
+  Python đã triển khai; áp dụng quy tắc và tính điểm cuối vẫn chưa triển khai.
 - Tài liệu nền tảng: đã thiết kế trong bộ tài liệu này.
 - Ngày cập nhật: 2026-08-06.
 
@@ -18,13 +18,13 @@
 - OpenAI SDK là optional dependency, không cần để import package, chạy CLI hoặc khởi động UI.
 - Tooling và cấu hình cho pytest, Ruff và mypy strict trong `pyproject.toml`.
 - Smoke tests xác minh package import và CLI help hoạt động.
-- Domain contract Pydantic v2 phiên bản `0.3.0` đã được triển khai tại
+- Domain contract Pydantic v2 phiên bản `0.4.0` đã được triển khai tại
   `src/point_audit/domain`.
 - Domain model đã bao phủ provenance workbook, candidate/parsed event, ngày thiếu năm,
   kỳ tính điểm, rule/match/conflict, duplicate, review/timeline, totals và đối soát theo người.
 - Mọi giá trị điểm/confidence dùng `Decimal` hữu hạn; model từ chối `float`, `NaN` và vô hạn.
 - Event ID ổn định được sinh bằng SHA-256 từ định danh file nguồn và vị trí/span sự kiện.
-- `docs/DATA_CONTRACT.md` đã đồng bộ với code contract `0.3.0`.
+- `docs/DATA_CONTRACT.md` đã đồng bộ với code contract `0.4.0`.
 - `WorkbookReader` tại `src/point_audit/ingestion` chỉ nhận đúng một sheet, tự tìm header không phụ thuộc hàng 1 và không ghi workbook.
 - Reader mở song song read-only view công thức/cached value, giữ cả hai trong provenance khi có và kiểm tra SHA-256 trước/sau.
 - Reader nhận diện `ScoringPeriod` từ tiêu đề phía trên, đọc ngày sinh dạng Excel date/chuỗi/serial và không dùng ngày sinh làm ngày sự kiện.
@@ -39,14 +39,22 @@
 - Ca không chắc chắn được giữ nguyên, sinh `SEGMENTATION_AMBIGUOUS` blocking và có
   thể chuyển thành `EventCandidate` với đầy đủ provenance; không gọi AI và không
   loại bỏ đoạn chưa hiểu.
+- `parse_event_candidate` nhận diện độc lập `declared_delta`, `academic_score`, môn,
+  ngày và `EventCategory`; dấu phẩy/chấm thập phân đều dùng `Decimal`.
+- Ngày thiếu năm được suy ra khi `ScoringPeriod` cho đúng một ngày đầy đủ; ngày ngoài
+  kỳ được giữ nguyên và thêm `DATE_OUTSIDE_PERIOD`.
+- `ParsedEvent` giữ span tuyệt đối cho subject, academic score, ngày và delta; contract
+  có cờ `date_year_inferred` để audit việc gắn năm.
+- Semantic parser không tạo `expected_delta`, `final_delta`, rule ID hoặc rule confidence.
 
 ## Kiểm tra gần nhất
 
 Chạy trong Python 3.12.13 với môi trường `.venv` cục bộ:
 
-- `pytest`: đạt, `103 passed` (`59` test mới cho segmenter và `44` test sẵn có).
+- `pytest`: đạt, `155 passed` (`59` test segmenter, `50` test semantic parser,
+  `2` test contract mới và `44` test nền trước parser).
 - `ruff check .`: đạt, không có lỗi.
-- `mypy src/point_audit app.py`: đạt, 22 source files không có lỗi.
+- `mypy src/point_audit app.py`: đạt, 23 source files không có lỗi.
 - `python -m point_audit --help`: exit code 0.
 - Streamlit `AppTest` khi `AI_ENABLED=false` và không có API key: đạt.
 
@@ -82,15 +90,24 @@ Chạy trong Python 3.12.13 với môi trường `.venv` cục bộ:
   cảnh báo vì cả tách lẫn không tách đều có thể hợp lý.
 - Dấu câu đứng sát cuối URL có thể thuộc URL hoặc là delimiter. Dấu câu bên trong URL
   được bảo vệ; dấu phẩy/chấm phẩy ngay trước khoảng trắng được coi là delimiter ngoài URL.
-- Segmenter chỉ quyết định ranh giới. Nó chưa xác định ngày, môn, điểm môn hay
-  `declared_delta` thành semantic fields.
+
+## Trường hợp semantic parser chưa thể xác định chắc chắn
+
+- Một candidate chứa nhiều delta, nhiều ngày hoặc nhiều điểm môn hợp lý: không tự
+  chọn; giữ dữ liệu nguồn, thêm cảnh báo mơ hồ và chờ duyệt.
+- Ngày thiếu năm nhưng không có `ScoringPeriod` được giữ ở mức `DAY_MONTH`.
+- Kỳ kéo dài qua nhiều năm nhưng không cho đúng một năm hợp lý cho ngày/tháng: giữ
+  trạng thái mơ hồ, không ép năm.
+- Tên môn ngoài danh sách alias hiện tại vẫn được bảo toàn trong raw text nhưng chưa
+  có `subject`; category có thể rơi vào `OTHER`.
+- Category hiện là baseline keyword deterministic; cần golden workbook ẩn danh để
+  bổ sung alias và xử lý các cụm đa nghĩa thực tế.
 
 ## Chưa được quyết định — chặn triển khai nghiệp vụ
 
 - Bảng quy tắc điểm chính thức và thứ tự ưu tiên khi nhiều quy tắc cùng khớp.
 - Chính sách tự động chấp nhận khi chỉ có `declared_delta` hoặc chỉ có `expected_delta`.
 - Ngưỡng sai số khi so sánh điểm và quy tắc làm tròn.
-- Cách suy ra năm cho ngày chỉ có ngày/tháng.
 - Định dạng đầu ra mong muốn: workbook báo cáo, JSON/CSV, giao diện duyệt hay kết hợp.
 - Môi trường chạy và nhà cung cấp AI; yêu cầu bảo mật dữ liệu cá nhân.
 
@@ -98,10 +115,9 @@ Chi tiết và đề xuất mặc định nằm trong `docs/ASSUMPTIONS.md`.
 
 ## Bước tiếp theo được khuyến nghị
 
-1. Chạy segmenter trên tập Minh chứng thật đã ẩn danh và bổ sung regression fixture cho
-   mọi cảnh báo/tách sai mới gặp.
-2. Triển khai semantic parser thuần Python cho ngày, môn, điểm môn và `declared_delta`
-   trên các segment đã có provenance.
-3. Người dùng xác nhận các câu hỏi chặn trong `docs/ASSUMPTIONS.md`.
-4. Bổ sung bảng quy tắc phiên bản đầu tiên cùng ví dụ đúng/sai đã ẩn danh.
-5. Chốt hợp đồng đầu ra, luồng duyệt và golden workbook nghiệp vụ.
+1. Chạy deterministic parser trên tập Minh chứng thật đã ẩn danh và bổ sung regression
+   fixture cho mọi cảnh báo, alias hoặc category mới gặp.
+2. Người dùng xác nhận các câu hỏi chặn còn lại trong `docs/ASSUMPTIONS.md`.
+3. Bổ sung bảng quy tắc phiên bản đầu tiên cùng ví dụ đúng/sai đã ẩn danh.
+4. Chốt hợp đồng đầu ra, luồng duyệt và golden workbook nghiệp vụ.
+5. Chỉ sau đó triển khai rule engine tạo `expected_delta` và xử lý conflict.

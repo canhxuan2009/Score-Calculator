@@ -96,6 +96,18 @@ Mỗi sự kiện tối thiểu có:
 - tín hiệu ngữ nghĩa phục vụ khớp quy tắc;
 - độ tin cậy, cảnh báo và trạng thái duyệt.
 
+Parser xác định phải giữ riêng:
+
+- `academic_score`: điểm môn/bài kiểm tra như `9đ Lí`, `4.8 Sinh`, `9.5anh`;
+- `declared_delta`: điểm cộng/trừ có dấu được viết trực tiếp như `(+5)`, `-5`,
+  `:+3`, `+37,5`;
+- `event_category`: một trong các category của `EventCategory` trong data contract;
+- span tuyệt đối cho môn, điểm môn, ngày và delta trên `RawCell.raw_text`.
+
+Ngày chỉ có ngày/tháng được gắn năm khi `ScoringPeriod` đã nhận diện cho đúng một
+ngày đầy đủ khả dĩ. Ngày nằm ngoài kỳ vẫn được giữ và thêm `DATE_OUTSIDE_PERIOD`,
+không tự sửa về biên kỳ.
+
 Thứ tự ngày, nội dung và delta là tự do. Dấu thập phân `,` và `.` đều được hỗ trợ. Delta có thể trong/ngoài ngoặc. Việc thiếu ngày hoặc thiếu delta không làm mất sự kiện; nó tạo cảnh báo/phân nhánh duyệt phù hợp.
 
 ## 6. Áp dụng bảng quy tắc
@@ -176,4 +188,5 @@ Tên và định dạng vật lý cuối cùng cần được người dùng xá
 8. Tất cả tổng và chênh lệch dùng phép tính Python/Decimal và truy ngược được về sự kiện.
 9. Khi có mục chưa duyệt, báo cáo ghi rõ `PROVISIONAL`.
 10. Không có lời gọi AI nào trực tiếp tạo `expected_delta`, `final_delta` hoặc tổng điểm.
-
+11. `9đ Lí 13/3(+5)` tạo `academic_score=9` và `declared_delta=5` độc lập.
+12. Parser semantic không đặt `expected_delta`, `final_delta` hay rule match.

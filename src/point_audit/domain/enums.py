@@ -28,6 +28,23 @@ class EventType(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class EventCategory(StrEnum):
+    """Deterministic semantic category assigned before rule matching."""
+
+    ACADEMIC_SCORE = "ACADEMIC_SCORE"
+    SUBJECT_ACHIEVEMENT = "SUBJECT_ACHIEVEMENT"
+    CLASS_DUTY = "CLASS_DUTY"
+    COMPETITION_PARTICIPATION = "COMPETITION_PARTICIPATION"
+    COMPETITION_AWARD = "COMPETITION_AWARD"
+    PERFORMANCE = "PERFORMANCE"
+    SPORTS = "SPORTS"
+    POSITIVE_BEHAVIOR = "POSITIVE_BEHAVIOR"
+    NEGATIVE_BEHAVIOR = "NEGATIVE_BEHAVIOR"
+    ATTENDANCE = "ATTENDANCE"
+    ROLE = "ROLE"
+    OTHER = "OTHER"
+
+
 class DeltaSign(StrEnum):
     """Explicit sign written for a declared delta."""
 

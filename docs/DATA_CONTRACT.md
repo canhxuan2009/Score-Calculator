@@ -1,6 +1,6 @@
 # Hợp đồng dữ liệu domain
 
-Tài liệu này mô tả đúng hợp đồng Pydantic v2 của `point_audit.domain` và kết quả đọc workbook tại `point_audit.ingestion`. Phiên bản hiện tại là `0.3.0`, tương ứng hằng `DOMAIN_CONTRACT_VERSION`.
+Tài liệu này mô tả đúng hợp đồng Pydantic v2 của `point_audit.domain` và kết quả đọc workbook tại `point_audit.ingestion`. Phiên bản hiện tại là `0.4.0`, tương ứng hằng `DOMAIN_CONTRACT_VERSION`.
 
 ## 1. Quy ước chung
 
@@ -20,6 +20,7 @@ Tài liệu này mô tả đúng hợp đồng Pydantic v2 của `point_audit.do
 |---|---|
 | `SourceColumn` | `SEQUENCE`, `FULL_NAME`, `BIRTH_DATE`, `GROUP`, `BASE_SCORE`, `POSITIVE_TOTAL`, `NEGATIVE_TOTAL`, `FINAL_TOTAL`, `CONDUCT`, `EVIDENCE`, `UNKNOWN` |
 | `EventType` | `BONUS`, `PENALTY`, `INFORMATIONAL`, `UNKNOWN` |
+| `EventCategory` | `ACADEMIC_SCORE`, `SUBJECT_ACHIEVEMENT`, `CLASS_DUTY`, `COMPETITION_PARTICIPATION`, `COMPETITION_AWARD`, `PERFORMANCE`, `SPORTS`, `POSITIVE_BEHAVIOR`, `NEGATIVE_BEHAVIOR`, `ATTENDANCE`, `ROLE`, `OTHER` |
 | `DeltaSign` | `PLUS`, `MINUS` |
 | `DatePrecision` | `FULL`, `DAY_MONTH`, `MISSING`, `AMBIGUOUS` |
 | `ParseSource` | `DETERMINISTIC`, `AI`, `MANUAL`, `HYBRID` |
@@ -180,13 +181,16 @@ Nếu caller cung cấp `event_id` không khớp giá trị trên, model bị t�
 | Field | Type | Ý nghĩa/ràng buộc |
 |---|---|---|
 | `event_type` | `EventType` | hướng cộng/trừ/thông tin/chưa rõ |
+| `event_category` | `EventCategory` | nhóm ngữ nghĩa xác định; mặc định `OTHER` để tương thích payload cũ |
 | `description` | `str` | mô tả chuẩn hóa, không rỗng |
 | `evidence_text` | `str` | minh chứng phải còn nguyên trong `raw_text` |
+| `subject` | `str | None` | mã môn chuẩn hóa, ví dụ `TOAN`, `LY`, `ANH` |
 | `academic_score` | `Decimal | None` | điểm bài kiểm tra/môn học |
 | `declared_delta` | `Decimal | None` | delta có dấu ghi trong Minh chứng |
 | `expected_delta` | `Decimal | None` | delta có dấu do rule Python tạo |
 | `final_delta` | `Decimal | None` | delta cuối chỉ có sau auto-accept/duyệt |
 | `declared_delta_sign` | `DeltaSign | None` | dấu được viết trong nguồn |
+| `subject_span` | `TextSpan | None` | span tên môn trong nguồn |
 | `academic_score_span` | `TextSpan | None` | span điểm bài kiểm tra |
 | `declared_delta_span` | `TextSpan | None` | span delta khai báo |
 | `date_span` | `TextSpan | None` | span ngày |
@@ -194,6 +198,7 @@ Nếu caller cung cấp `event_id` không khớp giá trị trên, model bị t�
 | `event_date` | `date | None` | chỉ dùng khi `FULL` |
 | `event_day` | `int | None` | `1..31`, dùng cho `DAY_MONTH` |
 | `event_month` | `int | None` | `1..12`, dùng cho `DAY_MONTH` |
+| `date_year_inferred` | `bool` | `true` khi năm được suy ra duy nhất từ `ScoringPeriod`; mặc định `false` |
 | `date_precision` | `DatePrecision` | trạng thái ngày tường minh |
 | `matched_rule_id` | `str | None` | rule duy nhất được khớp |
 | `rule_match_confidence` | `ConfidenceDecimal | None` | confidence của rule match |
@@ -205,9 +210,11 @@ Nếu caller cung cấp `event_id` không khớp giá trị trên, model bị t�
 Các bất biến của `ParsedEvent`:
 
 - `academic_score` và `academic_score_span` phải cùng tồn tại hoặc cùng `null`.
+- `subject` và `subject_span` phải cùng tồn tại hoặc cùng `null`.
 - `declared_delta`, `declared_delta_span`, `declared_delta_sign` phải cùng tồn tại hoặc cùng `null`; dấu phải khớp giá trị.
 - Các span con phải nằm trong `source_span`.
 - `FULL`: có `event_date`, `event_date_text`, `date_span`; không có `event_day/month`.
+- `date_year_inferred=true` chỉ hợp lệ với `FULL`; text và span vẫn giữ đúng ngày/tháng nguồn, không chèn năm vào raw text.
 - `DAY_MONTH`: không có `event_date`; bắt buộc day, month, raw date text và span. Ngày/tháng phải có thể tồn tại trong ít nhất một năm; ví dụ 31/2 bị từ chối, 29/2 được giữ.
 - `MISSING`: không mang bất kỳ giá trị/span ngày nào và phải có warning `MISSING_EVENT_DATE`.
 - `AMBIGUOUS`: không có ngày đầy đủ, phải giữ text mơ hồ, có warning `DATE_AMBIGUOUS` và `requires_review=true`.
@@ -220,6 +227,22 @@ Các bất biến của `ParsedEvent`:
 - `UNREVIEWED`/`PENDING_REVIEW` không được chứa final review data.
 
 `reported_confidence` và `final_confidence` là hai field độc lập. Giá trị AI tự khai không bao giờ tự động trở thành confidence cuối.
+
+### 5.4 Hợp đồng deterministic semantic parser
+
+`point_audit.parsing.parse_event_candidate` nhận một `EventCandidate` và tùy chọn
+`ScoringPeriod`, sau đó tạo `ParsedEvent` theo các ràng buộc:
+
+- điểm có dấu được viết trực tiếp là `declared_delta`; dấu phẩy/chấm thập phân đều
+  chuyển sang `Decimal`, còn span giữ đúng token nguồn;
+- `academic_score` được nhận diện độc lập với `declared_delta`; ví dụ
+  `9đ Lí 13/3(+5)` cho `academic_score=9`, `declared_delta=5`;
+- ngày có năm được giữ nguyên; ngày chỉ có ngày/tháng chỉ được nâng lên `FULL` khi
+  `ScoringPeriod` suy ra duy nhất một năm;
+- ngày ngoài kỳ không bị sửa, phải có `DATE_OUTSIDE_PERIOD`;
+- nhiều delta/ngày/điểm môn hợp lý không được tự chọn, phải sinh cảnh báo mơ hồ;
+- parser không được đặt `expected_delta`, `final_delta`, `matched_rule_id` hoặc
+  `rule_match_confidence`.
 
 ## 6. Validation và duplicate
 
@@ -416,4 +439,9 @@ Conflict chưa giải quyết không có resolution data. Conflict đã giải q
 
 ## 12. Compatibility và migration
 
-Phiên bản `0.3.0` là thay đổi cộng thêm so với `0.2.0`: bổ sung `RawCell.formula`, `RawCell.cached_value_text`, `ROW_FORMULA_MISMATCH` và ba model kết quả ingestion. Không có dữ liệu persistence sản xuất nên chưa cần migration vật lý; payload `0.2.0` vẫn validate vì hai field mới của `RawCell` đều mặc định `null`. Mọi thay đổi sau `0.3.0` phải cập nhật đồng thời code, test fixture, tài liệu này và version contract.
+Phiên bản `0.4.0` là thay đổi cộng thêm so với `0.3.0`: bổ sung `EventCategory`,
+`ParsedEvent.event_category`, `subject`, `subject_span` và `date_year_inferred`.
+Không có dữ liệu persistence sản xuất nên chưa cần migration vật lý. Payload `0.3.0`
+vẫn validate vì category mặc định `OTHER`, subject/span mặc định `null` và cờ suy ra
+năm mặc định `false`. Mọi thay đổi sau `0.4.0` phải cập nhật đồng thời code, test
+fixture, tài liệu này và version contract.

@@ -12,6 +12,7 @@ from pydantic import Field, field_validator, model_validator
 from point_audit.domain.enums import (
     DatePrecision,
     DeltaSign,
+    EventCategory,
     EventType,
     ParseSource,
     ReviewAction,
@@ -197,13 +198,16 @@ class ParsedEvent(EventCandidate):
     """Validated semantic event with separated scores, date and review state."""
 
     event_type: EventType
+    event_category: EventCategory = EventCategory.OTHER
     description: str
     evidence_text: str
+    subject: str | None = None
     academic_score: FiniteDecimal | None = None
     declared_delta: FiniteDecimal | None = None
     expected_delta: FiniteDecimal | None = None
     final_delta: FiniteDecimal | None = None
     declared_delta_sign: DeltaSign | None = None
+    subject_span: TextSpan | None = None
     academic_score_span: TextSpan | None = None
     declared_delta_span: TextSpan | None = None
     date_span: TextSpan | None = None
@@ -211,6 +215,7 @@ class ParsedEvent(EventCandidate):
     event_date: date | None = None
     event_day: int | None = Field(default=None, ge=1, le=31)
     event_month: int | None = Field(default=None, ge=1, le=12)
+    date_year_inferred: bool = False
     date_precision: DatePrecision
     matched_rule_id: str | None = None
     rule_match_confidence: ConfidenceDecimal | None = None
@@ -224,14 +229,22 @@ class ParsedEvent(EventCandidate):
     def validate_event_text(cls, value: str) -> str:
         return _require_nonblank(value, "event text")
 
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str | None) -> str | None:
+        if value is not None:
+            return _require_nonblank(value, "subject")
+        return value
+
     @model_validator(mode="after")
     def validate_parsed_state(self) -> Self:
         if self.evidence_text not in self.raw_text:
             raise ValueError("evidence_text must be preserved within raw_text")
+        self._validate_optional_span(self.subject_span, "subject_span")
         self._validate_optional_span(self.academic_score_span, "academic_score_span")
         self._validate_optional_span(self.declared_delta_span, "declared_delta_span")
         self._validate_optional_span(self.date_span, "date_span")
-        self._validate_score_spans()
+        self._validate_subject_and_score_spans()
         self._validate_date_state()
         self._validate_rule_state()
         self._validate_delta_state()
@@ -244,7 +257,9 @@ class ParsedEvent(EventCandidate):
         if span.start < self.source_span.start or span.end > self.source_span.end:
             raise ValueError(f"{field_name} must be contained within source_span")
 
-    def _validate_score_spans(self) -> None:
+    def _validate_subject_and_score_spans(self) -> None:
+        if (self.subject is None) != (self.subject_span is None):
+            raise ValueError("subject and subject_span must appear together")
         if (self.academic_score is None) != (self.academic_score_span is None):
             raise ValueError("academic_score and academic_score_span must appear together")
         declared_parts = (
@@ -264,6 +279,8 @@ class ParsedEvent(EventCandidate):
 
     def _validate_date_state(self) -> None:
         has_date_text = self.event_date_text is not None and bool(self.event_date_text.strip())
+        if self.date_year_inferred and self.date_precision is not DatePrecision.FULL:
+            raise ValueError("date_year_inferred is only valid for a FULL date")
         if self.date_precision is DatePrecision.FULL:
             if self.event_date is None or not has_date_text or self.date_span is None:
                 raise ValueError("FULL date requires event_date, event_date_text and date_span")
